@@ -43,7 +43,7 @@ app = Flask(__name__)
 @app.route('/process-resume', methods=['POST'])
 def process_resume_endpoint():
     uploaded_file = request.files['resume']
-    input_text = request.form['job_description']
+    input_text = request.form['Job_Description']
     response = process_resume(uploaded_file, input_text)
     return jsonify({'response': response})
 
