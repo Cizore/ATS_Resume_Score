@@ -6,7 +6,7 @@ function Contents() {
     <div className="p-6 bg-white shadow-md rounded-lg">
       <h1 className="text-2xl font-bold mb-4">Contents</h1>
       <p className="text-gray-700">
-        Here is where the main content will go. You can provide additional details or sections here.
+        Here is where the main content will go, providing additional details or sections as needed
       </p>
     </div>
   );
