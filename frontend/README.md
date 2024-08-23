@@ -1,3 +1,6 @@
+#Introduction
+The ATS Resume Score Check project involves developing a system that analyzes and scores resumes based on criteria set by Applicant Tracking Systems (ATS), helping users optimize their resumes for better job application success rates. The project aims to enhance resume compatibility with ATS by providing actionable feedback and suggestions.
+
 # Getting Started with Create React App
 
 This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
