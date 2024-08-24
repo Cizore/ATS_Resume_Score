@@ -1,75 +1,83 @@
-from dotenv import load_dotenv
-load_dotenv()
-import base64
-import os
-import io
-from PIL import Image
-import pdf2image
-import google.generativeai as genai
-from flask import Flask, request, jsonify, send_file
 
+from flask import Flask, request, jsonify, send_from_directory
+from dotenv import load_dotenv
+import os
+import fitz
+import google.generativeai as genai
+from flask_cors import CORS
+import docx2txt
+
+# Load environment variables
+load_dotenv()
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
-def get_gemini_response(pdf_content, input_text):
-    model = genai.GenerativeModel('gemini-pro-vision')
-    response = model.generate_content([pdf_content[0], input_text])
+app = Flask(__name__, static_folder='build', static_url_path='/')
+CORS(app)
+
+
+
+def get_gemini_response(input_prompt, pdf_content, job_description):
+    model = genai.GenerativeModel('gemini-pro')
+    response = model.generate_content([input_prompt, pdf_content, job_description])
     return response.text
 
 def input_pdf_setup(uploaded_file):
-    if uploaded_file is not None:
-        images = pdf2image.convert_from_bytes(uploaded_file.read())
-        first_page = images[0]
-        img_byte_arr = io.BytesIO()
-        first_page.save(img_byte_arr, format='JPEG')
-        img_byte_arr = img_byte_arr.getvalue()
-        pdf_parts = [
-            {
-                "mime_type": "image/jpeg",
-                "data": base64.b64encode(img_byte_arr).decode()
-            }
-        ]
-        return pdf_parts
-    else:
-        raise FileNotFoundError("No File uploaded")
+    document = fitz.open(stream=uploaded_file.read(), filetype="pdf")
+    text_parts = [page.get_text() for page in document]
+    pdf_text_content = " ".join(text_parts)
+    return pdf_text_content
 
-def process_resume(uploaded_file, input_text):
-    pdf_content = input_pdf_setup(uploaded_file)
-    response = get_gemini_response(pdf_content, input_text)
-    return response
+def input_docx_setup(uploaded_file):
+    text = docx2txt.process(uploaded_file)
+    return text
 
-def score_resume(response):
-    # Simple scoring logic based on response length
-    score = len(response) / 100
-    return score
+def is_resume(file_content):
+    # Simple resume detection logic
+    keywords = ["experience", "education", "skills", "work", "projects"]
+    for keyword in keywords:
+        if keyword.lower() in file_content.lower():
+            return True
+    return False
 
-def suggest_improvements(response):
-    # Simple suggestion logic based on response content
-    suggestions = ["Use keywords from the job description", "Highlight achievements over responsibilities"]
-    return suggestions
+@app.route('/analyze-resume', methods=['POST'])
+def analyze_resume():
+    try:
+        job_description = request.form.get('job_description')
+        if not job_description:
+            return jsonify({'error': 'Job description is required.'}), 400
 
-app = Flask(__name__)
+        input_prompt = "You are an experienced Technical Human Resource Manager. Review the provided resume against the job description. Share your professional evaluation on whether the candidate's profile aligns with the role. Highlight the strengths and weaknesses of the applicant in relation to the specified job requirements. Provide a 30-word summary."
 
-@app.route('/process-resume', methods=['POST'])
-def process_resume_endpoint():
-    uploaded_file = request.files['resume']
-    input_text = request.form['Job_Description']
-    response = process_resume(uploaded_file, input_text)
-    score = score_resume(response)
-    suggestions = suggest_improvements(response)
-    return jsonify({
-        'response': response,
-        'score': score,
-        'suggestions': suggestions
-    })
+        if 'resume' not in request.files:
+            return jsonify({'error': 'No file uploaded'}), 400
 
-@app.route('/upload-resume', methods=['POST'])
-def upload_resume():
-    uploaded_file = request.files['resume']
-    return send_file(
-        uploaded_file,
-        as_attachment=True,
-        attachment_filename='resume.pdf'
-    )
+        uploaded_file = request.files['resume']
+        file_extension = uploaded_file.filename.split('.')[-1].lower()
+
+        if file_extension == 'pdf':
+            file_content = input_pdf_setup(uploaded_file)
+        elif file_extension == 'docx':
+            file_content = input_docx_setup(uploaded_file)
+        else:
+            return jsonify({'error': 'Invalid file type. Only PDF and DOCX files are allowed.'}), 400
+
+        if not is_resume(file_content):
+            return jsonify({'error': 'The uploaded file does not appear to be a resume.'}), 400
+
+        print(f"Job Description: {job_description}")
+        print(f"File Content: {file_content[:50]}...")
+
+        response_text = get_gemini_response(input_prompt, file_content, job_description)
+        return jsonify({'response': response_text}), 200
+
+    except Exception as e:
+        print(f"Error: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/')
+def serve_react_app():
+    return send_from_directory(app.static_folder, 'index.html')
 
 if __name__ == '__main__':
     app.run(debug=True)
+
