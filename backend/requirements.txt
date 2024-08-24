@@ -2,3 +2,8 @@ pdf2image
 google.generativeai
 python-dotenv
 flask
+docx2txt
+flask_cors
+fitz
+os
+dotenv
